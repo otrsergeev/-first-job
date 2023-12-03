@@ -1,0 +1,68 @@
+- name: Install Prometheus and Grafana
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Ping test
+      ping:
+
+    
+
+    - name: Install Prometheus
+      apt:
+        name: prometheus
+        state: present
+
+    - name: Install Prometheus Node Exporter
+      apt:
+        name: prometheus-node-exporter
+        state: present
+
+    - name: Install Grafana
+      shell: docker run -d  -p 3000:3000 grafana/grafana-enterprise
+      ignore_errors: true
+
+      
+
+    - name: Wait for Grafana to start
+      wait_for:
+        host: 127.0.0.1
+        port: 3000
+        delay: 5
+        timeout: 60
+      when: ansible_distribution == 'Ubuntu'
+
+    - name: Print Grafana login credentials
+      debug:
+        msg: "Grafana login credentials - username: admin, password: admin"
+      when: ansible_distribution == 'Ubuntu'
+      
+    - name: Download node_exporter
+      get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v1.2.2/node_exporter-1.2.2.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter.tar.gz"
+
+    - name: Extract node_exporter
+      unarchive:
+        src: "/tmp/node_exporter.tar.gz"
+        dest: "/opt"
+        remote_src: yes
+        creates: "/opt/node_exporter-1.2.2.linux-amd64"
+
+    - name: Create systemd service file
+      template:
+        src: "/home/danil/node_exporter.service.j2"
+        dest: "/etc/systemd/system/node_exporter.service"
+      notify:
+        - Reload systemd
+
+    - name: Start node_exporter service
+      systemd:
+        name: node_exporter
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
